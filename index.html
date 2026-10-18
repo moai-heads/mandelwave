@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08090e">
+  <meta name="description" content="Mandelwave — a live, sound-reactive visual instrument for fractals, light and pattern.">
+  <title>Mandelwave — a living light instrument</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Crect width='80' height='80' rx='18' fill='%2308090e'/%3E%3Cpath d='M40 10 48 32 70 40 48 48 40 70 32 48 10 40 32 32Z' fill='none' stroke='%23c6ff57' stroke-width='3'/%3E%3Ccircle cx='40' cy='40' r='8' fill='%23ff58be'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Mandelwave home">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 40 40"><path d="M20 2 24.5 15.5 38 20 24.5 24.5 20 38 15.5 24.5 2 20 15.5 15.5Z"/><circle cx="20" cy="20" r="4.2"/></svg></span>
+        <span class="brand-word">MANDEL<span>WAVE</span></span>
+        <span class="brand-version">LIVE VISUAL INSTRUMENT</span>
+      </a>
+      <div class="top-actions">
+        <div class="engine-status"><span class="status-dot"></span><span id="engineLabel">LIGHT ENGINE / READY</span></div>
+        <button class="icon-button" id="fullscreenButton" type="button" aria-label="Toggle fullscreen" title="Fullscreen (F)"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg></button>
+        <button class="control-toggle" id="controlToggle" type="button" aria-expanded="false" aria-controls="controlPanel"><span class="toggle-glyph">◈</span><span>CONTROL ROOM</span><span class="toggle-key">[ H ]</span></button>
+      </div>
+    </header>
+
+    <main class="stage" id="stage">
+      <canvas id="visualizer" aria-label="Animated sound-reactive psychedelic visualization"></canvas>
+      <div class="stage-vignette" aria-hidden="true"></div>
+      <div class="stage-topline">
+        <div class="scene-ident"><span class="tiny-overline">NOW EXPLORING</span><strong id="sceneName">PRISMATIC BLOOM</strong><span class="scene-index" id="sceneIndex">01 / 04</span></div>
+        <div class="stage-badges"><span class="live-badge"><i></i> LIVE</span><span class="webgl-badge">GPU / WEBGL</span></div>
+      </div>
+      <div class="hero-copy">
+        <div class="hero-kicker"><span class="kicker-line"></span> AN INSTRUMENT FOR THE INNER EYE</div>
+        <h1>See sound<br>take <em>shape.</em></h1>
+        <p>Fractals, frequencies &amp; light in a living instrument.<br>Feed it a track. Find your own pattern.</p>
+        <button class="hero-open" id="heroOpen" type="button">OPEN THE CONTROL ROOM <span>↗</span></button>
+      </div>
+      <div class="signal-readout" aria-live="polite">
+        <div class="readout-item"><span class="readout-label">BASS</span><span class="meter-track"><i id="bassMeter"></i></span><b id="bassValue">—</b></div>
+        <div class="readout-item"><span class="readout-label">MID</span><span class="meter-track"><i id="midMeter"></i></span><b id="midValue">—</b></div>
+        <div class="readout-item"><span class="readout-label">AIR</span><span class="meter-track"><i id="highMeter"></i></span><b id="highValue">—</b></div>
+      </div>
+      <div class="wave-wrap"><canvas id="waveform" aria-label="Audio waveform"></canvas><div class="wave-caption"><span>TIME / AMPLITUDE</span><span id="sourceStatus">NO SIGNAL · READY</span></div></div>
+      <div class="stage-footer"><span><i class="footer-pulse"></i> A SOFTWARE DREAM MACHINE</span><span class="footer-right">NO STROBE · MOTION-GUARDED BY DESIGN</span></div>
+      <div class="drop-hint" id="dropHint">DROP AN AUDIO FILE TO BEGIN</div>
+    </main>
+
+    <footer class="transport">
+      <div class="transport-source">
+        <button class="transport-button primary" id="fileButton" type="button" title="Choose an audio file"><span class="button-icon">＋</span><span>LOAD AUDIO</span></button>
+        <input id="audioFile" type="file" accept="audio/*" hidden>
+        <button class="transport-button" id="micButton" type="button"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4m-4 0h8"/></svg><span>MIC INPUT</span></button>
+        <button class="transport-button play-button" id="playButton" type="button" disabled aria-label="Play or pause audio"><span id="playGlyph">▶</span></button>
+        <div class="track-meta"><span id="trackName">No track loaded</span><span id="trackTime">Drop a file or use microphone input</span></div>
+      </div>
+      <div class="transport-center">
+        <span class="transport-mark">✳</span><span id="transportMood">PRISMATIC BLOOM</span><span class="transport-divider">/</span><span id="transportSource">VISUALS RUNNING</span>
+      </div>
+      <div class="transport-tools">
+        <button class="transport-button compact" id="snapshotButton" type="button" title="Save a frame as PNG"><svg viewBox="0 0 24 24"><path d="M4 7h3l2-2h6l2 2h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>CAPTURE</span></button>
+        <button class="transport-button compact" id="presetButton" type="button" title="Next preset"><svg viewBox="0 0 24 24"><path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5z"/></svg><span>SHIFT SCENE</span></button>
+      </div>
+    </footer>
+
+    <div class="panel-backdrop" id="panelBackdrop"></div>
+    <aside class="control-panel" id="controlPanel" aria-hidden="true" aria-label="Visual controls">
+      <div class="panel-head">
+        <div><span class="tiny-overline">MAKE IT YOURS</span><h2>Control room<span class="panel-star">✳</span></h2></div>
+        <button class="icon-button close-panel" id="closePanel" type="button" aria-label="Close control room">×</button>
+      </div>
+      <div class="panel-scroll">
+        <section class="panel-section input-section">
+          <div class="section-heading"><span class="section-number">01</span><div><h3>Signal in</h3><p>Give the light something to hear.</p></div><span class="section-indicator" id="inputIndicator">IDLE</span></div>
+          <div class="input-actions"><button id="panelFileButton" class="source-card" type="button"><span class="source-icon">♫</span><span><b>Audio file</b><small>MP3, WAV, OGG &amp; more</small></span><span class="source-arrow">↗</span></button><button id="panelMicButton" class="source-card" type="button"><span class="source-icon mic-icon">◉</span><span><b>Microphone</b><small>Live room sound</small></span><span class="source-arrow">↗</span></button></div>
+          <div class="input-note">Audio stays in this browser. Mic permission is only used while connected.</div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading"><span class="section-number">02</span><div><h3>Choose a world</h3><p>Four ways into the pattern.</p></div></div>
+          <div class="scene-grid" id="sceneGrid">
+            <button class="scene-card selected" data-scene="0" type="button"><span class="scene-thumb thumb-bloom"><i></i></span><b>Bloom</b><small>RADIAL / ORGANIC</small></button>
+            <button class="scene-card" data-scene="1" type="button"><span class="scene-thumb thumb-fractal"><i></i></span><b>Fractal</b><small>MANDELBROT / INFINITE</small></button>
+            <button class="scene-card" data-scene="2" type="button"><span class="scene-thumb thumb-tunnel"><i></i></span><b>Tunnel</b><small>DEPTH / LIQUID</small></button>
+            <button class="scene-card" data-scene="3" type="button"><span class="scene-thumb thumb-laser"><i></i></span><b>Laser field</b><small>BEAM / GEOMETRY</small></button>
+          </div>
+        </section>
+
+        <section class="panel-section">
+          <div class="section-heading"><span class="section-number">03</span><div><h3>Shape the signal</h3><p>Set a home base for each dimension.</p></div></div>
+          <div id="parameterControls" class="parameter-list"></div>
+        </section>
+
+        <section class="panel-section automation-section">
+          <div class="section-heading"><span class="section-number">04</span><div><h3>Living parameters</h3><p>Hold still, drift, or listen by frequency.</p></div></div>
+          <div class="automation-legend"><span>MODE</span><span>RANGE</span><span>CYCLE</span></div>
+          <div id="automationControls" class="automation-list"></div>
+        </section>
+
+        <section class="panel-section preset-section">
+          <div class="section-heading"><span class="section-number">05</span><div><h3>Presets &amp; memory</h3><p>Save the particular universe you found.</p></div></div>
+          <label class="select-label" for="presetSelect">STARTING POINT</label>
+          <select id="presetSelect" class="full-select"></select>
+          <div class="memory-actions"><button class="small-action" id="savePreset" type="button">SAVE CURRENT</button><button class="small-action" id="loadPreset" type="button">LOAD SAVED</button><button class="small-action reset-action" id="resetButton" type="button">RESET</button></div>
+        </section>
+
+        <section class="panel-section safety-section">
+          <div class="safety-icon">◎</div><div><b>Gentle by design</b><p>No strobing or sudden flashes. Visuals are still intense and may affect photosensitive viewers; pause or look away if uncomfortable.</p></div>
+        </section>
+        <div class="panel-bottom">MANDELWAVE <span>·</span> A VISUAL INSTRUMENT, NOT A SUBJECTIVE EXPERIENCE SIMULATOR</div>
+      </div>
+    </aside>
+
+    <audio id="audioElement" preload="none"></audio>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
