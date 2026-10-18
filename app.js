@@ -6,25 +6,27 @@
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const fmt = (n, digits = 2) => Number(n).toFixed(digits);
   const defs = {
-    zoom: { label: 'Zoom', min: 0.55, max: 2.2, step: 0.01, value: 1.04, digits: 2 },
-    twist: { label: 'Twist', min: 0, max: 2.8, step: 0.01, value: 0.78, digits: 2 },
-    speed: { label: 'Drift', min: 0.08, max: 1.7, step: 0.01, value: 0.48, digits: 2 },
+    morph: { label: 'Form', min: 0.05, max: 1.6, step: 0.01, value: 0.92, digits: 2 },
+    twist: { label: 'Twist', min: 0, max: 2.8, step: 0.01, value: 0.92, digits: 2 },
+    speed: { label: 'Drift', min: 0.08, max: 1.7, step: 0.01, value: 0.62, digits: 2 },
     symmetry: { label: 'Symmetry', min: 3, max: 12, step: 1, value: 7, digits: 0 },
+    detail: { label: 'Detail', min: 0.15, max: 1.5, step: 0.01, value: 0.82, digits: 2 },
     hue: { label: 'Palette', min: 0, max: 1, step: 0.001, value: 0.76, digits: 2 },
-    glow: { label: 'Glow', min: 0.2, max: 1.35, step: 0.01, value: 0.82, digits: 2 },
+    glow: { label: 'Glow', min: 0.2, max: 1.35, step: 0.01, value: 0.95, digits: 2 },
   };
-  const scenes = ['PRISMATIC BLOOM', 'INFINITE GARDEN', 'LIQUID WORMHOLE', 'LASER FIELD'];
+  const scenes = ['PRISMATIC BLOOM', 'MANDELBROT DRIFT', 'INFINITE WORMHOLE', 'LASER CATHEDRAL', 'CHROMA PLASMA', 'LIQUID TAPESTRY'];
   const initialParams = Object.fromEntries(Object.entries(defs).map(([key, d]) => [key, d.value]));
   const defaultAutomation = Object.fromEntries(Object.entries(defs).map(([key, d]) => [key, {
     mode: key === 'glow' ? 'high' : 'hold', min: d.min, max: d.max, period: 8,
   }]));
   const presets = [
-    { name: 'Prismatic bloom', scene: 0, params: { zoom: 1.04, twist: .78, speed: .48, symmetry: 7, hue: .76, glow: .82 } },
-    { name: 'Cathedral of glass', scene: 0, params: { zoom: .78, twist: 1.24, speed: .28, symmetry: 10, hue: .48, glow: 1.02 } },
-    { name: 'Mandelbrot garden', scene: 1, params: { zoom: 1.18, twist: .44, speed: .22, symmetry: 6, hue: .84, glow: .72 } },
-    { name: 'Liquid wormhole', scene: 2, params: { zoom: 1.21, twist: 1.4, speed: .62, symmetry: 8, hue: .93, glow: .91 } },
-    { name: 'Laser geometry', scene: 3, params: { zoom: .86, twist: .34, speed: .34, symmetry: 9, hue: .33, glow: .88 } },
-    { name: 'Quiet mycelium', scene: 1, params: { zoom: .68, twist: .21, speed: .13, symmetry: 5, hue: .58, glow: .58 } },
+    { name: 'Prismatic bloom', scene: 0, params: { morph: .92, twist: .92, speed: .62, symmetry: 7, detail: .82, hue: .76, glow: .95 } },
+    { name: 'Cathedral of glass', scene: 0, params: { morph: 1.38, twist: 1.54, speed: .46, symmetry: 10, detail: 1.18, hue: .48, glow: 1.18 } },
+    { name: 'Mandelbrot garden', scene: 1, params: { morph: .72, twist: .54, speed: .32, symmetry: 6, detail: 1.3, hue: .84, glow: .78 } },
+    { name: 'Liquid wormhole', scene: 2, params: { morph: 1.24, twist: 1.72, speed: .8, symmetry: 8, detail: 1.05, hue: .93, glow: 1.12 } },
+    { name: 'Laser geometry', scene: 3, params: { morph: 1.1, twist: .82, speed: .7, symmetry: 9, detail: .94, hue: .33, glow: 1.2 } },
+    { name: 'Quiet mycelium', scene: 5, params: { morph: .56, twist: .34, speed: .2, symmetry: 5, detail: .56, hue: .58, glow: .66 } },
+    { name: 'Chroma storm', scene: 4, params: { morph: 1.48, twist: 2.1, speed: 1.12, symmetry: 11, detail: 1.4, hue: .08, glow: 1.3 } },
   ];
 
   const state = {
@@ -47,6 +49,7 @@
     startedAt: performance.now(),
     lastTime: 0,
     lowMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    pointer: { x: 0, y: 0 },
     frameCount: 0,
     fpsStamp: performance.now(),
     fps: 60,
@@ -66,14 +69,15 @@
     void main(){ vUv = aPosition * .5 + .5; gl_Position = vec4(aPosition,0.0,1.0); }
   `;
   const fragmentSource = `
-    precision mediump float;
+    precision highp float;
     varying vec2 vUv;
     uniform vec2 uResolution;
     uniform float uTime;
     uniform float uScene;
-    uniform float uZoom;
+    uniform float uMorph;
     uniform float uTwist;
     uniform float uSymmetry;
+    uniform float uDetail;
     uniform float uHue;
     uniform float uGlow;
     uniform float uBass;
@@ -83,67 +87,119 @@
     uniform vec2 uPointer;
     const float PI = 3.141592653589793;
     vec2 rot(vec2 p,float a){float c=cos(a),s=sin(a);return vec2(c*p.x-s*p.y,s*p.x+c*p.y);}
-    vec3 hsv(vec3 c){vec3 p=abs(fract(c.xxx+vec3(0.,2./3.,1./3.))*6.-3.);return c.z*mix(vec3(1.),clamp(p-1.,0.,1.),c.y);}
-    float mandel(vec2 c){vec2 z=vec2(0.);float n=0.;for(int i=0;i<32;i++){float x=z.x*z.x-z.y*z.y+c.x;float y=2.*z.x*z.y+c.y;z=vec2(x,y);if(dot(z,z)>100.)break;n+=1.;}return n/32.;}
+    vec3 spectrum(float h){return .52+.48*cos(6.28318*(h+vec3(0.,.33,.67)));}
+    float mandel(vec2 c,float form){
+      vec2 z=c*clamp((form-.05)/1.55,0.,.85);float n=0.;float r2=0.;
+      for(int i=0;i<48;i++){z=vec2(z.x*z.x-z.y*z.y+c.x,2.*z.x*z.y+c.y);r2=dot(z,z);if(r2>256.)break;n+=1.;}
+      if(n>=47.)return 0.;
+      float smoothN=n+1.-log2(max(.001,log2(max(1.001,sqrt(r2)))));
+      return clamp(smoothN/48.,0.,1.);
+    }
     void main(){
       vec2 uv=(gl_FragCoord.xy-.5*uResolution)/uResolution.y;
+      uv += uPointer*.07;
       float t=uTime;
+      float form=uMorph, twist=uTwist, detail=uDetail, n=max(3.,floor(uSymmetry+.5));
       float bass=uBass, mid=uMid, high=uHigh;
-      vec2 p=uv/max(.4,uZoom);
-      p=rot(p, t*.045 + uTwist*.18 + uPointer.x*.18);
-      p += uPointer*.035;
-      float n=max(3.,floor(uSymmetry+.5));
-      float aa=atan(p.y,p.x), rr=length(p);
-      float sector=2.*PI/n;
-      float folded=abs(mod(aa+sector*.5,sector)-sector*.5);
-      vec2 k=vec2(cos(folded),sin(folded))*rr;
-      k += .045*vec2(sin(k.y*8.+t*.34),cos(k.x*8.-t*.29))*(.3+uTwist);
-      float f=0.; float glow=0.; float hue=uHue;
+      float r=length(uv), a=atan(uv.y,uv.x);
+      vec2 p=uv;
+      float field=0., lines=0., h=uHue;
       if(uScene<.5){
-        float petals=sin(folded*n*1.3 + rr*7.2 - t*.44 - mid*.8);
-        float rings=sin(rr*29. - sin(folded*n*2. + t*.22)*3.2 - bass*2.2);
-        float lattice=sin((k.x+k.y)*17.+t*.18)*cos((k.x-k.y)*16.-t*.2);
-        f=.52 + .22*petals + .16*rings + .10*lattice;
-        glow=exp(-abs(rings)*2.8)+exp(-abs(petals)*3.8)*.6;
-        hue += .045*sin(folded*n + t*.12) + high*.06;
+        float sector=2.*PI/n;
+        float bend=twist*(.26*sin(r*5.-t*1.35)+.13*sin(a*n*.5+t*.72));
+        float warpedA=a+bend+.12*form*sin(a*n-t*1.05+r*6.);
+        float folded=abs(mod(warpedA+sector*.5,sector)-sector*.5);
+        float petalR=r*(1.+.24*form*cos(n*a-t*.86))+form*.075*sin(n*warpedA+r*8.-t*1.25);
+        float petal=sin(folded*n*1.35+petalR*(12.+detail*12.)-t*1.8-mid*1.8);
+        float ring=sin(petalR*(23.+detail*24.)-sin(warpedA*n*2.+t)*2.5-t*2.4-bass*2.8);
+        float cells=sin((p.x+p.y)*(17.+detail*28.)+t*1.25)*cos((p.x-p.y)*(19.+detail*24.)-t*1.1);
+        field=.5+.26*petal+.19*ring+.13*cells;
+        lines=exp(-abs(petal)*3.8)+.75*exp(-abs(ring)*3.3)+.35*exp(-abs(cells)*5.);
+        h+=.12*sin(warpedA*n+t*.55)+high*.1+field*.18;
       }else if(uScene<1.5){
-        vec2 c=p*1.6 + vec2(-.52,.035*sin(t*.15));
-        c += vec2(.035*sin(t*.09),.025*cos(t*.12));
-        float m=mandel(c);
-        float bands=sin(m*61. + t*.26 + high*1.2);
-        f=.25+.6*m+.15*bands;
-        glow=exp(-abs(bands)*2.4)*(1.-m*.55);
-        hue += m*.26 + .08*sin(t*.08);
+        float cam=exp2(.34*sin(t*.28)+.18*sin(t*.11+mid));
+        vec2 q=rot(uv/(.42+.22*form)*cam,t*(.13+twist*.09));
+        q+=vec2(.12*sin(t*.22),.09*cos(t*.19))*(.3+form);
+        vec2 c=q*1.18+vec2(-.48+.12*sin(t*.17),.035*cos(t*.23));
+        c=rot(c,twist*.18*sin(t*.2));
+        float m=mandel(c,form);
+        float contour=sin(m*(75.+detail*100.)-t*1.9+high*4.);
+        float orbit=sin((c.x*c.x+c.y*c.y)*(28.+detail*18.)+atan(c.y,c.x)*n-t*1.5);
+        field=.12+.76*m+.12*contour;
+        lines=exp(-abs(contour)*3.2)*(1.-m*.55)+exp(-abs(orbit)*4.)*.52;
+        h+=m*.62+contour*.035+high*.16;
       }else if(uScene<2.5){
-        float a=folded;
-        float tunnel=sin(17.*a + 3.4/(rr+.15) - t*.48 - bass*2.3);
-        float rings=sin(34./(rr+.22) - t*.62 + mid*2.);
-        float spiral=sin(a*n + 12.*rr - t*.27 + uTwist);
-        f=.46+.23*tunnel+.18*rings+.13*spiral;
-        glow=exp(-abs(tunnel)*3.)+exp(-abs(rings)*3.)*.8;
-        hue += .12*cos(a*n-t*.11)+high*.08;
+        float warpedA=a+twist*.52*sin(r*4.-t*1.25)+.18*sin(a*n+t*.65);
+        float warpedR=max(.035,r+form*.095*sin(warpedA*n-t*1.65)+.035*sin(warpedA*5.+t));
+        float depth=1./(warpedR+.105);
+        float spokes=sin(warpedA*n*1.5+depth*2.4-t*2.3-mid*4.);
+        float rings=sin(depth*(11.+detail*6.)-t*3.2-bass*5.);
+        float spiral=sin(warpedA*n+depth*(4.5+form*4.)-t*2.);
+        field=.48+.24*spokes+.2*rings+.12*spiral;
+        lines=exp(-abs(spokes)*3.4)+exp(-abs(rings)*3.)*.9+exp(-abs(spiral)*4.)*.5;
+        h+=.15*cos(warpedA*n-t*.6)+depth*.025+high*.13;
+      }else if(uScene<3.5){
+        vec2 q=rot(uv,twist*.18*sin(t*.52));
+        q.x+=.06*form*sin(q.y*12.-t*1.3);
+        float beams=0., haze=0.;
+        for(int i=0;i<12;i++){
+          float fi=float(i);
+          if(fi<n){
+            float spread=(fi/(max(2.,n-1.))-.5)*2.1;
+            float angle=spread+.56*sin(t*.72+fi*1.71+mid);
+            float d=abs(q.x-tan(angle)*(q.y+.48));
+            float width=.008+.005*(.5+.5*sin(t*1.8+fi));
+            float beam=exp(-d/(width+.004))*(.52+.48*sin(t*2.1+fi*1.31+high*4.));
+            beams=max(beams,beam);
+            haze+=exp(-d*.7)*.045;
+          }
+        }
+        float cross=sin((q.x+q.y*.5)*(20.+detail*18.)-t*2.2)*sin((q.x-q.y)*(13.+detail*12.)+t*1.5);
+        float star=exp(-length(q-vec2(.02,.08))*(8.+detail*12.));
+        field=.14+.65*beams+.16*cross+.32*star;
+        lines=beams+haze+star*.7+exp(-abs(cross)*4.)*.25;
+        h+=q.x*.16+q.y*.12+high*.22;
+      }else if(uScene<4.5){
+        vec2 q=rot(uv,twist*.22*sin(t*.35));
+        float warp=sin(q.y*(5.+detail*6.)+t*1.4)*.23*form+cos(q.x*4.-t*.9)*.2*form;
+        q+=vec2(warp,warp*.7);
+        float f1=sin(q.x*(9.+detail*7.)+sin(q.y*7.-t)*2.3+t*1.55+bass*3.);
+        float f2=cos(q.y*(11.+detail*9.)+sin(q.x*6.+t*.8)*2.+t*1.1+mid*2.);
+        float f3=sin(length(q)*17.-t*2.2+sin(atan(q.y,q.x)*n+t)*2.);
+        field=.5+.24*f1+.2*f2+.12*f3;
+        lines=exp(-abs(f1)*3.)+exp(-abs(f2)*3.)*.8+exp(-abs(f3)*3.5)*.6;
+        h+=.15*f1+.16*f2+high*.2;
       }else{
-        vec2 q=rot(k,t*.05);
-        float beam=sin((q.x*1.2+q.y*.42)*36. + sin(q.y*10.-t*.25)*2. - t*.35 - mid*2.);
-        float grid=sin(q.y*25.+t*.17)*sin(q.x*15.-t*.12);
-        float radial=sin(rr*24.-t*.35-bass*2.);
-        f=.42+.28*beam+.16*grid+.14*radial;
-        glow=exp(-abs(beam)*3.2)+exp(-abs(radial)*3.)*.7;
-        hue += .07*sin(q.y*4.+t*.14)+high*.12;
+        float sector=2.*PI/n;
+        float aa=a+twist*.42*sin(r*3.2-t*1.1)+.15*sin(a*3.-t*.6);
+        float fold=abs(mod(aa+sector*.5,sector)-sector*.5);
+        float ribbonR=r+.16*form*sin(aa*n+sin(r*5.-t)*2.-t*1.15);
+        float ribbon=sin(fold*n*1.7+(ribbonR*(18.+detail*18.))-t*2.1);
+        float contour=sin((ribbonR+form*.08*sin(aa*n-t))* (31.+detail*26.)-t*1.55);
+        float mesh=sin(aa*n*2.+r*15.-t)*sin(r*18.+aa*n-t*1.4);
+        field=.5+.28*ribbon+.2*contour+.11*mesh;
+        lines=exp(-abs(ribbon)*3.6)+exp(-abs(contour)*3.)*.75+exp(-abs(mesh)*4.)*.38;
+        h+=fold*n*.055+contour*.08+high*.12;
       }
-      float center=exp(-rr*rr*(5.5+uGlow*3.));
-      float edge=1.-smoothstep(1.0,1.62,length(uv));
-      float energy=clamp(f,0.,1.2);
-      vec3 col=hsv(vec3(fract(hue + energy*.11 + bass*.045),.72, .16+energy*.58));
-      vec3 neon=hsv(vec3(fract(hue+.36+mid*.07),.88,.8));
-      col += neon*glow*(.13+uGlow*.15);
-      col += hsv(vec3(fract(hue+.58),.65,1.))*center*(.16+uGlow*.2);
-      float audioWave=sin(uv.x*42. + t*.9)*exp(-abs(uv.y-(.38*bass-.24*mid))*95.);
-      col += hsv(vec3(fract(hue+.53),.82,1.))*audioWave*(.06+.18*high);
-      float grain=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453)-.5;
-      col += grain*.018;
-      col *= edge * uIntensity;
-      col = pow(max(col,0.),vec3(.88));
+      float audioPulse=1.+bass*.46*sin(t*2.4);
+      float concert=0.;
+      for(int i=0;i<4;i++){
+        float fi=float(i);
+        float angle=-1.05+fi*.7+.58*sin(t*.58+fi*1.7+mid*.7);
+        float beamDist=abs(uv.x-tan(angle)*(uv.y+.62));
+        float beamWidth=.007+high*.009;
+        concert=max(concert,exp(-beamDist/beamWidth)*(.68+.32*sin(t*.82+fi*1.4)));
+      }
+      float center=exp(-r*r*(3.4+form*2.))* (.18+uGlow*.25);
+      float edge=1.-smoothstep(1.15,1.8,length(uv));
+      float energy=clamp(field+concert*.1,0.,1.35);
+      vec3 base=spectrum(fract(h+energy*.12));
+      vec3 neon=spectrum(fract(h+.22+lines*.055+mid*.08));
+      vec3 col=base*(.11+energy*.68)+neon*lines*(.13+uGlow*.28);
+      col+=spectrum(fract(h+.12+t*.025+high*.1))*concert*(.18+uGlow*.34);
+      col+=spectrum(fract(h+.55+high*.15))*center*audioPulse;
+      col*=mix(.5,1.,edge)*uIntensity;
+      col=pow(max(col,0.),vec3(.78));
       gl_FragColor=vec4(col,1.);
     }
   `;
@@ -167,7 +223,7 @@
       const buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
       const loc = gl.getAttribLocation(program,'aPosition'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
-      for (const name of ['uResolution','uTime','uScene','uZoom','uTwist','uSymmetry','uHue','uGlow','uBass','uMid','uHigh','uIntensity','uPointer']) uniforms[name]=gl.getUniformLocation(program,name);
+      for (const name of ['uResolution','uTime','uScene','uMorph','uTwist','uSymmetry','uDetail','uHue','uGlow','uBass','uMid','uHigh','uIntensity','uPointer']) uniforms[name]=gl.getUniformLocation(program,name);
       gl.clearColor(0,0,0,1);
     } catch (e) {
       console.warn('Mandelwave WebGL fallback:', e.message);
@@ -225,7 +281,7 @@
   function applyPreset(index) {
     const preset=presets[index]; if(!preset)return;
     state.scene=preset.scene;
-    for(const key of Object.keys(defs)) state.params[key]=preset.params[key];
+    for(const key of Object.keys(defs)) if(Number.isFinite(preset.params[key])) state.params[key]=preset.params[key];
     updateControlValues(); updateSceneUI();
   }
   function updateControlValues(){
@@ -238,7 +294,7 @@
   function updateSceneUI(){
     $$('.scene-card').forEach(b=>b.classList.toggle('selected',Number(b.dataset.scene)===state.scene));
     $('#sceneName').textContent=scenes[state.scene];$('#transportMood').textContent=scenes[state.scene];
-    $('#sceneIndex').textContent=`0${state.scene+1} / 04`;
+    $('#sceneIndex').textContent=`${String(state.scene+1).padStart(2,'0')} / ${String(scenes.length).padStart(2,'0')}`;
   }
   function valueFor(key,t){
     const cfg=state.automation[key]; if(!cfg||cfg.mode==='hold')return state.params[key];
@@ -332,6 +388,8 @@
     if(state.audioMode==='file')$('#trackTime').textContent=`${clock(current)} / ${clock(duration)}`;
   });
   $('#audioElement').addEventListener('ended',()=>$('#playGlyph').textContent='▶');
+  $('#stage').addEventListener('pointermove',e=>{const r=glCanvas.getBoundingClientRect();state.pointer.x=clamp((e.clientX-r.left)/r.width-.5,-.5,.5);state.pointer.y=clamp(.5-(e.clientY-r.top)/r.height,-.5,.5);});
+  $('#stage').addEventListener('pointerleave',()=>{state.pointer.x=0;state.pointer.y=0;});
   $('#stage').addEventListener('dragover',e=>{e.preventDefault();$('#stage').classList.add('drag-over');});
   $('#stage').addEventListener('dragleave',e=>{if(!$('#stage').contains(e.relatedTarget))$('#stage').classList.remove('drag-over');});
   $('#stage').addEventListener('drop',e=>{e.preventDefault();$('#stage').classList.remove('drag-over');loadFile(e.dataTransfer.files[0]);});
@@ -381,22 +439,26 @@
     if(state.analyser)state.analyser.getByteTimeDomainData(state.waveData);
     drawWave(tms);
     const p={};for(const k of Object.keys(defs))p[k]=valueFor(k,t);
-    const motionFactor=state.lowMotion?.5:1;
-    const time=t*motionFactor*(.35+p.speed*.75);
+    const motionFactor=state.lowMotion ? .72 : 1;
+    const time=t*motionFactor*(.3+p.speed*1.55);
     if(gl&&!fallback){
       gl.useProgram(gl.getParameter(gl.CURRENT_PROGRAM));
       gl.uniform2f(uniforms.uResolution,glCanvas.width,glCanvas.height);
       gl.uniform1f(uniforms.uTime,time);gl.uniform1f(uniforms.uScene,state.scene);
-      gl.uniform1f(uniforms.uZoom,p.zoom);gl.uniform1f(uniforms.uTwist,p.twist);gl.uniform1f(uniforms.uSymmetry,p.symmetry);
+      gl.uniform1f(uniforms.uMorph,p.morph);gl.uniform1f(uniforms.uTwist,p.twist);gl.uniform1f(uniforms.uSymmetry,p.symmetry);gl.uniform1f(uniforms.uDetail,p.detail);
       gl.uniform1f(uniforms.uHue,p.hue);gl.uniform1f(uniforms.uGlow,p.glow);
       gl.uniform1f(uniforms.uBass,state.smoothBands.bass);gl.uniform1f(uniforms.uMid,state.smoothBands.mid);gl.uniform1f(uniforms.uHigh,state.smoothBands.high);
-      gl.uniform1f(uniforms.uIntensity,state.lowMotion?.82:1.0);gl.uniform2f(uniforms.uPointer,0,0);
+      gl.uniform1f(uniforms.uIntensity,state.lowMotion ? .82 : 1.0);gl.uniform2f(uniforms.uPointer,state.pointer.x,state.pointer.y);
       gl.drawArrays(gl.TRIANGLES,0,6);
     }else if(fallbackCtx){
       fallbackCtx.fillStyle='#08090e';fallbackCtx.fillRect(0,0,glCanvas.width,glCanvas.height);
-      const w=glCanvas.width,h=glCanvas.height,cx=w*.56,cy=h*.48,r=Math.min(w,h)*.36*p.zoom;
-      fallbackCtx.save();fallbackCtx.translate(cx,cy);fallbackCtx.rotate(time*.1);
-      for(let i=0;i<30;i++){fallbackCtx.beginPath();fallbackCtx.strokeStyle=`hsla(${(p.hue*360+i*7)%360},90%,${45+i%3*10}%,${.12+i%5*.04})`;fallbackCtx.lineWidth=2+i%3;fallbackCtx.ellipse(0,0,r*(.22+i*.026),r*(.62+i*.017),Math.sin(time*.2+i)*.08,0,Math.PI*2);fallbackCtx.stroke();}
+      const w=glCanvas.width,h=glCanvas.height,cx=w*.56,cy=h*.48,r=Math.min(w,h)*(.2+p.morph*.22);
+      fallbackCtx.save();fallbackCtx.translate(cx,cy);fallbackCtx.rotate(time*.32*p.twist);
+      if(state.scene===3){
+        for(let i=0;i<13;i++){const a=-1.2+i*.2+Math.sin(time*.8+i)*.35;fallbackCtx.beginPath();fallbackCtx.moveTo(0,h*.48);fallbackCtx.lineTo(Math.tan(a)*h*.8,-h*.65);fallbackCtx.strokeStyle=`hsla(${(p.hue*360+i*25+time*28)%360},100%,65%,.62)`;fallbackCtx.lineWidth=1+i%3;fallbackCtx.shadowBlur=16;fallbackCtx.shadowColor=fallbackCtx.strokeStyle;fallbackCtx.stroke();}
+      }else{
+        for(let i=0;i<Math.round(18+p.detail*28);i++){fallbackCtx.beginPath();fallbackCtx.strokeStyle=`hsla(${(p.hue*360+i*11+time*18)%360},100%,${52+i%3*12}%,${.24+i%5*.08})`;fallbackCtx.lineWidth=1+i%3;fallbackCtx.ellipse(0,0,r*(.18+i*.018),r*(.6+i*.018),Math.sin(time*.65+i)*.15,0,Math.PI*2);fallbackCtx.stroke();}
+      }
       fallbackCtx.restore();
     }
     state.frameCount++;if(tms-state.fpsStamp>1000){state.fps=Math.round(state.frameCount*1000/(tms-state.fpsStamp));state.frameCount=0;state.fpsStamp=tms;}
@@ -415,7 +477,7 @@
     try{localStorage.setItem('mandelwave-state',JSON.stringify({scene:state.scene,params:state.params,automation:state.automation}));$('#savePreset').textContent='SAVED ✓';setTimeout(()=>$('#savePreset').textContent='SAVE CURRENT',1300);}catch{alert('Could not save in this browser.');}
   });
   $('#loadPreset').addEventListener('click',()=>{
-    try{const saved=JSON.parse(localStorage.getItem('mandelwave-state'));if(!saved)throw new Error();state.scene=clamp(saved.scene|0,0,3);state.params={...initialParams,...saved.params};
+    try{const saved=JSON.parse(localStorage.getItem('mandelwave-state'));if(!saved)throw new Error();state.scene=clamp(saved.scene|0,0,scenes.length-1);state.params={...initialParams,...saved.params};
       for(const key of Object.keys(defs)){Object.assign(state.automation[key],defaultAutomation[key],saved.automation?.[key]||{});const cfg=state.automation[key];const row=$(`.automation-row[data-key="${key}"]`);if(!row)continue;$('.auto-mode',row).value=cfg.mode;$('.min-control',row).value=cfg.min;$('.max-control',row).value=cfg.max;$('.auto-period',row).value=cfg.period;$('.auto-mode',row).dispatchEvent(new Event('change'));}
       updateControlValues();updateSceneUI();$('#loadPreset').textContent='LOADED ✓';setTimeout(()=>$('#loadPreset').textContent='LOAD SAVED',1300);
     }catch{alert('No saved universe yet. Save a setup first.');}
@@ -427,6 +489,7 @@
   $('#fullscreenButton').addEventListener('click',()=>{
     if(!document.fullscreenElement)$('#stage').requestFullscreen?.().catch(()=>{});else document.exitFullscreen?.();
   });
+  document.addEventListener('fullscreenchange',resize);
   document.addEventListener('keydown',e=>{
     if(e.target.matches('input,select,textarea'))return;
     if(e.key==='Escape')setPanel(false);
